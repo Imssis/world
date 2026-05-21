@@ -21,12 +21,12 @@ data class ProjectDetails(
 )
 
 data class ModVersion(
-    val files: List<ModFile>
+    @SerializedName("files") val files: List<ModFile>
 )
 
 data class ModFile(
-    val url: String,
-    val primary: Boolean
+    @SerializedName("url") val url: String,
+    @SerializedName("primary") val primary: Boolean
 )
 
 interface ModrinthApiService {

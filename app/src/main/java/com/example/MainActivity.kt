@@ -15,6 +15,7 @@ import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Delete
+import androidx.compose.material.icons.filled.ArrowBack
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
@@ -51,7 +52,10 @@ class MainActivity : ComponentActivity() {
                         )
                     }
                     composable("download") {
-                        DownloadModScreen(viewModel = viewModel)
+                        DownloadModScreen(
+                            viewModel = viewModel,
+                            onBack = { navController.popBackStack() }
+                        )
                     }
                 }
             }
@@ -175,7 +179,7 @@ fun ModItem(modFile: DocumentFile, iconUri: Uri?, onToggle: () -> Unit, onDelete
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-fun DownloadModScreen(viewModel: ModViewModel) {
+fun DownloadModScreen(viewModel: ModViewModel, onBack: () -> Unit) {
     val context = LocalContext.current
     val scope = rememberCoroutineScope()
     var query by remember { mutableStateOf("") }
@@ -186,7 +190,18 @@ fun DownloadModScreen(viewModel: ModViewModel) {
     var showSheet by remember { mutableStateOf(false) }
     val sheetState = rememberModalBottomSheetState()
     
-    Scaffold(topBar = { TopAppBar(title = { Text("Download Mods") }) }) { padding ->
+    Scaffold(
+        topBar = { 
+            TopAppBar(
+                title = { Text("Download Mods") },
+                navigationIcon = {
+                    IconButton(onClick = onBack) {
+                        Icon(androidx.compose.material.icons.Icons.Default.ArrowBack, "Back")
+                    }
+                }
+            ) 
+        }
+    ) { padding ->
         Column(modifier = Modifier.padding(padding).padding(16.dp)) {
             OutlinedTextField(
                 value = query,
@@ -221,8 +236,22 @@ fun DownloadModScreen(viewModel: ModViewModel) {
                             showSheet = true
                         }
                     ) {
-                        Row(modifier = Modifier.padding(8.dp)) {
-                            Text(text = mod.title ?: "Unknown")
+                        Row(modifier = Modifier.padding(8.dp), verticalAlignment = Alignment.CenterVertically) {
+                            if (mod.icon_url != null) {
+                                Image(
+                                    painter = rememberAsyncImagePainter(mod.icon_url),
+                                    contentDescription = "Mod Icon",
+                                    modifier = Modifier.size(64.dp)
+                                )
+                            } else {
+                                Box(modifier = Modifier.size(64.dp))
+                            }
+                            Spacer(modifier = Modifier.width(12.dp))
+                            Column {
+                                Text(text = mod.title ?: "Unknown", style = MaterialTheme.typography.titleMedium)
+                                Text(text = "By ${mod.author ?: "Unknown"}", style = MaterialTheme.typography.bodySmall)
+                                Text(text = "${mod.downloads ?: 0} downloads", style = MaterialTheme.typography.labelSmall)
+                            }
                         }
                     }
                 }
@@ -236,26 +265,91 @@ fun DownloadModScreen(viewModel: ModViewModel) {
             sheetState = sheetState
         ) {
             selectedMod?.let { mod ->
-                Column(modifier = Modifier.padding(16.dp)) {
-                    Text(text = mod.title ?: "Unknown", style = MaterialTheme.typography.headlineMedium)
-                    Text(text = mod.description ?: "")
-                    Button(onClick = {
-                        // Download logic
+                Column(modifier = Modifier.padding(16.dp).fillMaxWidth()) {
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        if (mod.icon_url != null) {
+                            Image(
+                                painter = rememberAsyncImagePainter(mod.icon_url),
+                                contentDescription = "Mod Icon",
+                                modifier = Modifier.size(80.dp)
+                            )
+                        }
+                        Spacer(modifier = Modifier.width(16.dp))
+                        Column {
+                            Text(text = mod.title ?: "Unknown", style = MaterialTheme.typography.headlineSmall)
+                            Text(text = "By ${mod.author ?: "Unknown"}", style = MaterialTheme.typography.bodyMedium)
+                        }
+                    }
+                    Spacer(modifier = Modifier.height(16.dp))
+                    Text(text = mod.description ?: "", style = MaterialTheme.typography.bodyLarge)
+                    Spacer(modifier = Modifier.height(24.dp))
+                    Button(
+                        modifier = Modifier.fillMaxWidth(),
+                        onClick = {
                         val dirUri = viewModel.modsDirUri
                         if (dirUri != null && mod.title != null) {
-                            val dir = DocumentFile.fromTreeUri(context, dirUri)
-                            val file = dir?.createFile("application/java-archive", "${mod.title}.jar")
-                            Toast.makeText(context, "Downloading mod...", Toast.LENGTH_SHORT).show()
-                            Toast.makeText(context, "Mod downloaded to: ${file?.uri}", Toast.LENGTH_SHORT).show()
-                            showSheet = false
+                            scope.launch {
+                                try {
+                                    val versions = withContext(Dispatchers.IO) {
+                                        com.example.network.RetrofitClient.apiService.getProjectVersions(mod.project_id)
+                                    }
+                                    val latestVersion = versions.firstOrNull()
+                                    val primaryFile = latestVersion?.files?.find { it.primary } ?: latestVersion?.files?.firstOrNull()
+                                    
+                                    if (primaryFile != null) {
+                                        Toast.makeText(context, "Starting download...", Toast.LENGTH_SHORT).show()
+                                        val success = withContext(Dispatchers.IO) {
+                                            downloadFile(context, primaryFile.url, dirUri, "${mod.title}.jar")
+                                        }
+                                        if (success) {
+                                            Toast.makeText(context, "Download complete!", Toast.LENGTH_SHORT).show()
+                                        } else {
+                                            Toast.makeText(context, "Download failed", Toast.LENGTH_SHORT).show()
+                                        }
+                                    } else {
+                                        Toast.makeText(context, "No files found for this mod", Toast.LENGTH_SHORT).show()
+                                    }
+                                } catch (e: Exception) {
+                                    Toast.makeText(context, "Error: ${e.message}", Toast.LENGTH_SHORT).show()
+                                }
+                                showSheet = false
+                            }
                         } else {
-                            Toast.makeText(context, "Please select mods folder or mod title invalid", Toast.LENGTH_SHORT).show()
+                            Toast.makeText(context, "Please select mods folder first", Toast.LENGTH_SHORT).show()
                         }
                     }) {
-                        Text("Download")
+                        Text("Download Latest Version")
                     }
                 }
             }
+        }
+    }
+}
+
+suspend fun downloadFile(context: android.content.Context, url: String, dirUri: Uri, fileName: String): Boolean {
+    return withContext(Dispatchers.IO) {
+        try {
+            val dir = DocumentFile.fromTreeUri(context, dirUri)
+            val file = dir?.createFile("application/java-archive", fileName) ?: return@withContext false
+            
+            val connection = java.net.URL(url).openConnection()
+            connection.connect()
+            
+            val input = connection.getInputStream()
+            val output = context.contentResolver.openOutputStream(file.uri) ?: return@withContext false
+            
+            val buffer = ByteArray(4096)
+            var bytesRead: Int
+            while (input.read(buffer).also { bytesRead = it } != -1) {
+                output.write(buffer, 0, bytesRead)
+            }
+            
+            output.close()
+            input.close()
+            true
+        } catch (e: Exception) {
+            e.printStackTrace()
+            false
         }
     }
 }
