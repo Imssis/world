@@ -309,12 +309,24 @@ fun LauncherDashboard(navController: NavController, viewModel: LauncherViewModel
                                 modifier = Modifier
                                     .fillMaxWidth()
                                     .padding(vertical = 4.dp)
-                                    .clickable { viewModel.selectedModpack = modpack },
+                                    .clickable { viewModel.onModpackSelected(modpack) },
                                 shape = RoundedCornerShape(12.dp),
                                 color = if (isSelected) NeonPurple.copy(alpha = 0.2f) else Color.White.copy(alpha = 0.03f),
                                 border = if (isSelected) BorderStroke(1.dp, NeonPurple) else null
                             ) {
-                                Text(text = modpack.title ?: "Unknown Modpack", modifier = Modifier.padding(16.dp))
+                                Column(modifier = Modifier.padding(16.dp)) {
+                                    Text(text = modpack.title ?: "Unknown Modpack", fontWeight = FontWeight.Bold)
+                                    if (isSelected && viewModel.selectedModpackDetails != null) {
+                                        Spacer(modifier = Modifier.height(8.dp))
+                                        Text("Files to install: ${viewModel.selectedModpackDetails?.firstOrNull()?.files?.size ?: 0}")
+                                        Button(
+                                            onClick = { viewModel.installModpackPipeline(modpack.project_id, context) },
+                                            enabled = !viewModel.isInstalling
+                                        ) {
+                                            Text(if (viewModel.isInstalling) "Installing..." else "Install Modpack")
+                                        }
+                                    }
+                                }
                             }
                         }
                     }
@@ -341,6 +353,13 @@ fun LauncherDashboard(navController: NavController, viewModel: LauncherViewModel
 @Composable
 fun SettingsScreen(navController: NavController, viewModel: LauncherViewModel) {
     val context = LocalContext.current
+    var showControllerSettings by remember { mutableStateOf(false) }
+
+    if (showControllerSettings) {
+        ControllerSettingsScreen(onBack = { showControllerSettings = false })
+        return
+    }
+
     val launcher = rememberLauncherForActivityResult(ActivityResultContracts.OpenDocumentTree()) { uri ->
         uri?.let {
             val flags = Intent.FLAG_GRANT_READ_URI_PERMISSION or Intent.FLAG_GRANT_WRITE_URI_PERMISSION
@@ -379,14 +398,13 @@ fun SettingsScreen(navController: NavController, viewModel: LauncherViewModel) {
             
             Spacer(modifier = Modifier.height(24.dp))
             
-            var ram by remember { mutableStateOf("2G") }
-            Text("ALLOCATED RAM", color = NeonCyan)
-            OutlinedTextField(
-                value = ram,
-                onValueChange = { ram = it },
+            Button(
+                onClick = { showControllerSettings = true },
                 modifier = Modifier.fillMaxWidth(),
-                label = { Text("e.g. 2G, 4096M") }
-            )
+                colors = ButtonDefaults.buttonColors(containerColor = NeonPurple)
+            ) {
+                Text("Customize Controller")
+            }
             
             Spacer(modifier = Modifier.height(24.dp))
             
@@ -406,8 +424,44 @@ fun SettingsScreen(navController: NavController, viewModel: LauncherViewModel) {
 fun border(width: androidx.compose.ui.unit.Dp, color: Color, shape: androidx.compose.ui.graphics.Shape) = 
     Modifier.border(width, color, shape)
 
-// Re-implementing the Mod Manager screens concisely or moving them to separate files is better, 
-// but for the sake of this architectural prompt, I'll provide the Launcher core first.
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+fun ControllerSettingsScreen(onBack: () -> Unit) {
+    var buttonSize by remember { mutableStateOf(50f) }
+    var buttonOpacity by remember { mutableStateOf(0.7f) }
+
+    Scaffold(
+        containerColor = Color.Black,
+        contentWindowInsets = WindowInsets.systemBars,
+        topBar = {
+            androidx.compose.material3.TopAppBar(
+                title = { Text("CONTROLLER MAPPING") },
+                navigationIcon = {
+                    IconButton(onClick = onBack) {
+                        Icon(Icons.Default.ArrowBack, null, tint = NeonCyan)
+                    }
+                },
+                colors = androidx.compose.material3.TopAppBarDefaults.topAppBarColors(containerColor = Color.Black)
+            )
+        }
+    ) { padding ->
+        Column(modifier = Modifier.padding(padding).padding(16.dp)) {
+            Text("Button Size: ${buttonSize.toInt()}", color = Color.White)
+            Slider(value = buttonSize, onValueChange = { buttonSize = it }, valueRange = 30f..100f)
+            
+            Spacer(modifier = Modifier.height(16.dp))
+            
+            Text("Button Opacity: ${"%.2f".format(buttonOpacity)}", color = Color.White)
+            Slider(value = buttonOpacity, onValueChange = { buttonOpacity = it }, valueRange = 0.1f..1.0f)
+            
+            Spacer(modifier = Modifier.height(24.dp))
+            
+            Button(onClick = { /* Save JSON logic */ }, modifier = Modifier.fillMaxWidth()) {
+                Text("SAVE CONTROLS")
+            }
+        }
+    }
+}
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable

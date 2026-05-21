@@ -17,13 +17,14 @@ class LauncherBootstrapper(private val context: Context) {
         gameDir: File,
         libsDir: File,
         ramAllocation: String = "2G",
-        playerName: String = "Player"
+        playerName: String = "Player",
+        javaPath: String = "/data/data/com.aistudio.cslauncher.vkmzqp/files/jdk-21/bin/java"
     ): List<String> {
         val classpath = buildClasspath(libsDir, versionId)
         val mainClass = "net.minecraft.client.main.Main"
         
         return mutableListOf<String>().apply {
-            add("java") // Path to OpenJDK binary
+            add(javaPath) // Use the provided Java binary path
             add("-Xmx$ramAllocation")
             add("-Xms$ramAllocation")
             add("-Djava.library.path=${libsDir.path}/natives")

@@ -28,15 +28,54 @@ class LauncherViewModel : ViewModel() {
     val versions: StateFlow<List<MojangVersion>> = _versions
     
     var modpacks by mutableStateOf<List<ModHit>>(emptyList())
+    var selectedModpackDetails by mutableStateOf<List<com.example.network.ModVersion>?>(null)
+    var isInstalling by mutableStateOf(false)
     
     var selectedVersion by mutableStateOf<MojangVersion?>(null)
     var selectedModpack by mutableStateOf<ModHit?>(null)
+
+    fun onModpackSelected(modpack: ModHit?) {
+        selectedModpack = modpack
+        if (modpack != null) {
+            inspectModpack(modpack.project_id)
+        }
+    }
     
     var accountName by mutableStateOf("Player")
     var errorMessage by mutableStateOf<String?>(null)
 
     init {
         fetchVersions()
+    }
+
+    private fun inspectModpack(projectId: String) {
+        viewModelScope.launch {
+            try {
+                selectedModpackDetails = RetrofitClient.apiService.getProjectVersions(projectId)
+            } catch (e: Exception) {
+                errorMessage = "Failed to inspect modpack: ${e.message}"
+            }
+        }
+    }
+    
+    fun installModpackPipeline(projectId: String, context: android.content.Context) {
+        viewModelScope.launch {
+            isInstalling = true
+            try {
+                val versions = RetrofitClient.apiService.getProjectVersions(projectId)
+                val latest = versions.firstOrNull()
+                // Assuming we want to download all files in the latest version for simplicity
+                val files = latest?.files ?: emptyList()
+                
+                // Pipeline logic would go here
+                
+                Log.d("LauncherViewModel", "Installing ${files.size} files for $projectId")
+            } catch (e: Exception) {
+                errorMessage = "Installation failed: ${e.message}"
+            } finally {
+                isInstalling = false
+            }
+        }
     }
 
     fun refreshModList(context: android.content.Context) {
