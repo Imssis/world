@@ -13,4 +13,12 @@ object RetrofitClient {
             .build()
             .create(ModrinthApiService::class.java)
     }
+
+    val mojangApiService: MojangApiService by lazy {
+        Retrofit.Builder()
+            .baseUrl("https://launchermeta.mojang.com/")
+            .addConverterFactory(GsonConverterFactory.create())
+            .build()
+            .create(MojangApiService::class.java)
+    }
 }

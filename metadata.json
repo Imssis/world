@@ -1,6 +1,6 @@
 {
-  "name": "Minecraft Mod Manager",
-  "description": "An Android application to manage Minecraft mods.",
+  "name": "CS LAUNCHER",
+  "description": "High-performance Minecraft Java Edition Launcher for Android.",
   "requestFramePermissions": [],
   "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
 }
