@@ -72,6 +72,7 @@ dependencies {
   implementation("androidx.documentfile:documentfile:1.0.1")
   implementation(libs.androidx.navigation.compose)
   implementation(libs.coil.compose)
+  implementation("com.squareup.retrofit2:converter-gson:2.9.0")
   implementation(platform(libs.firebase.bom))
   // implementation(libs.accompanist.permissions)
   implementation(libs.androidx.activity.compose)

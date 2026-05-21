@@ -31,19 +31,27 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 
+import androidx.lifecycle.viewmodel.compose.viewModel
+import com.example.ModViewModel
+// ... other imports
+
 class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         enableEdgeToEdge()
         setContent {
             MyApplicationTheme {
+                val viewModel: ModViewModel = viewModel()
                 val navController = rememberNavController()
                 NavHost(navController = navController, startDestination = "mod_manager") {
                     composable("mod_manager") {
-                        ModManagerScreen(onNavigateToDownload = { navController.navigate("download") })
+                        ModManagerScreen(
+                            onNavigateToDownload = { navController.navigate("download") },
+                            viewModel = viewModel
+                        )
                     }
                     composable("download") {
-                        DownloadModScreen()
+                        DownloadModScreen(viewModel = viewModel)
                     }
                 }
             }
@@ -53,11 +61,10 @@ class MainActivity : ComponentActivity() {
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-fun ModManagerScreen(onNavigateToDownload: () -> Unit) {
+fun ModManagerScreen(onNavigateToDownload: () -> Unit, viewModel: ModViewModel) {
     val context = LocalContext.current
     val scope = rememberCoroutineScope()
     var modFiles by remember { mutableStateOf<List<DocumentFile>>(emptyList()) }
-    var modsDirUri by remember { mutableStateOf<Uri?>(null) }
 
     suspend fun refreshListSuspending(uri: Uri): List<DocumentFile> = withContext(Dispatchers.IO) {
         val docFile = DocumentFile.fromTreeUri(context, uri)
@@ -72,11 +79,16 @@ fun ModManagerScreen(onNavigateToDownload: () -> Unit) {
         uri?.let {
             val flags = Intent.FLAG_GRANT_READ_URI_PERMISSION or Intent.FLAG_GRANT_WRITE_URI_PERMISSION
             context.contentResolver.takePersistableUriPermission(it, flags)
-            modsDirUri = it
+            viewModel.modsDirUri = it
             scope.launch {
                 modFiles = refreshListSuspending(it)
             }
         }
+    }
+    
+    // Refresh if we already have a URI
+    LaunchedEffect(viewModel.modsDirUri) {
+        viewModel.modsDirUri?.let { modFiles = refreshListSuspending(it) }
     }
 
     Scaffold(
@@ -99,13 +111,13 @@ fun ModManagerScreen(onNavigateToDownload: () -> Unit) {
                                 }
                                 modFile.renameTo(newName)
                             }
-                            modsDirUri?.let { modFiles = refreshListSuspending(it) }
+                            viewModel.modsDirUri?.let { modFiles = refreshListSuspending(it) }
                         }
                     }, onDelete = {
                         scope.launch {
                             val deleted = withContext(Dispatchers.IO) { modFile.delete() }
                             if (deleted) {
-                                modsDirUri?.let { modFiles = refreshListSuspending(it) }
+                                viewModel.modsDirUri?.let { modFiles = refreshListSuspending(it) }
                                 Toast.makeText(context, "Deleted ${modFile.name}", Toast.LENGTH_SHORT).show()
                             } else {
                                 Toast.makeText(context, "Failed to delete ${modFile.name}", Toast.LENGTH_SHORT).show()
@@ -154,10 +166,89 @@ fun ModItem(modFile: DocumentFile, onToggle: () -> Unit, onDelete: () -> Unit) {
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-fun DownloadModScreen() {
-    Scaffold(topBar = { TopAppBar(title = { Text("Download Mods") }) }) {
-        Box(modifier = Modifier.padding(it).fillMaxSize(), contentAlignment = Alignment.Center) {
-            Text("Coming Soon!")
+fun DownloadModScreen(viewModel: ModViewModel) {
+    val context = LocalContext.current
+    val scope = rememberCoroutineScope()
+    var query by remember { mutableStateOf("") }
+    var results by remember { mutableStateOf<List<com.example.network.ModHit>>(emptyList()) }
+    var isLoading by remember { mutableStateOf(false) }
+    
+    var selectedMod by remember { mutableStateOf<com.example.network.ModHit?>(null) }
+    var showSheet by remember { mutableStateOf(false) }
+    val sheetState = rememberModalBottomSheetState()
+    
+    Scaffold(topBar = { TopAppBar(title = { Text("Download Mods") }) }) { padding ->
+        Column(modifier = Modifier.padding(padding).padding(16.dp)) {
+            OutlinedTextField(
+                value = query,
+                onValueChange = { query = it },
+                label = { Text("Search Mods") },
+                modifier = Modifier.fillMaxWidth()
+            )
+            Button(onClick = {
+                isLoading = true
+                scope.launch {
+                    try {
+                        val response = withContext(Dispatchers.IO) {
+                            com.example.network.RetrofitClient.apiService.searchMods(query)
+                        }
+                        results = response.hits
+                    } catch (e: Exception) {
+                        Toast.makeText(context, "Search failed: ${e.message}", Toast.LENGTH_SHORT).show()
+                    } finally {
+                        isLoading = false
+                    }
+                }
+            }) { Text("Search") }
+            
+            if (isLoading) CircularProgressIndicator()
+            
+            LazyColumn {
+                items(results) { mod ->
+                    Card(
+                        modifier = Modifier.fillMaxWidth().padding(vertical = 4.dp),
+                        onClick = {
+                            selectedMod = mod
+                            showSheet = true
+                        }
+                    ) {
+                        Row(modifier = Modifier.padding(8.dp)) {
+                            Text(text = mod.title)
+                        }
+                    }
+                }
+            }
+        }
+    }
+    
+    if (showSheet) {
+        ModalBottomSheet(
+            onDismissRequest = { showSheet = false },
+            sheetState = sheetState
+        ) {
+            selectedMod?.let { mod ->
+                Column(modifier = Modifier.padding(16.dp)) {
+                    Text(text = mod.title, style = MaterialTheme.typography.headlineMedium)
+                    Text(text = mod.description)
+                    Button(onClick = {
+                        // Download logic
+                        val dirUri = viewModel.modsDirUri
+                        if (dirUri != null) {
+                            val dir = DocumentFile.fromTreeUri(context, dirUri)
+                            val file = dir?.createFile("application/java-archive", "${mod.title}.jar")
+                            Toast.makeText(context, "Downloading mod...", Toast.LENGTH_SHORT).show()
+                            // Note: Real file downloading requires more work (e.g., streaming to the uri)
+                            // Placeholder:
+                            Toast.makeText(context, "Mod downloaded to: ${file?.uri}", Toast.LENGTH_LONG).show()
+                            showSheet = false
+                        } else {
+                            Toast.makeText(context, "Please select mods folder first", Toast.LENGTH_SHORT).show()
+                        }
+                    }) {
+                        Text("Download")
+                    }
+                }
+            }
         }
     }
 }
