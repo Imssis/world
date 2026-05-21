@@ -70,6 +70,8 @@ secrets {
 dependencies {
   implementation(platform(libs.androidx.compose.bom))
   implementation("androidx.documentfile:documentfile:1.0.1")
+  implementation(libs.androidx.navigation.compose)
+  implementation(libs.coil.compose)
   implementation(platform(libs.firebase.bom))
   // implementation(libs.accompanist.permissions)
   implementation(libs.androidx.activity.compose)
