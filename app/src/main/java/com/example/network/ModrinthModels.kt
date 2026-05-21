@@ -33,6 +33,9 @@ interface ModrinthApiService {
     @GET("v2/search")
     suspend fun searchMods(@Query("query") query: String): SearchResponse
 
+    @GET("v2/search")
+    suspend fun searchModpacks(@Query("query") query: String = "", @Query("facets") facets: String = "[[\"project_type:modpack\"]]"): SearchResponse
+
     @GET("v2/project/{id}")
     suspend fun getProjectDetails(@Path("id") id: String): ProjectDetails
 

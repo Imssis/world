@@ -16,7 +16,7 @@ object RetrofitClient {
 
     val mojangApiService: MojangApiService by lazy {
         Retrofit.Builder()
-            .baseUrl("https://launchermeta.mojang.com/")
+            .baseUrl("https://piston-meta.mojang.com/")
             .addConverterFactory(GsonConverterFactory.create())
             .build()
             .create(MojangApiService::class.java)

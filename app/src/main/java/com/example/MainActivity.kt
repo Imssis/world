@@ -234,8 +234,29 @@ fun LauncherDashboard(navController: NavController, viewModel: LauncherViewModel
             
             Spacer(modifier = Modifier.height(24.dp))
             
-            Text("SELECT VERSION", color = NeonCyan, style = MaterialTheme.typography.titleSmall)
-            Spacer(modifier = Modifier.height(8.dp))
+            Spacer(modifier = Modifier.height(24.dp))
+            
+            TabRow(
+                selectedTabIndex = viewModel.currentTab.ordinal,
+                containerColor = Color.Transparent,
+                contentColor = NeonCyan
+            ) {
+                Tab(
+                    selected = viewModel.currentTab == MainTab.OFFICIAL,
+                    onClick = { viewModel.currentTab = MainTab.OFFICIAL },
+                    text = { Text("OFFICIAL") }
+                )
+                Tab(
+                    selected = viewModel.currentTab == MainTab.MODPACKS,
+                    onClick = {
+                        viewModel.currentTab = MainTab.MODPACKS
+                        viewModel.fetchModpacks()
+                    },
+                    text = { Text("MODPACKS") }
+                )
+            }
+            
+            Spacer(modifier = Modifier.height(16.dp))
             
             viewModel.errorMessage?.let { error ->
                 Card(
@@ -250,27 +271,50 @@ fun LauncherDashboard(navController: NavController, viewModel: LauncherViewModel
                 }
             }
             
-            if (versions.isEmpty() && viewModel.errorMessage == null) {
-                CircularProgressIndicator(color = NeonCyan)
+            if (viewModel.currentTab == MainTab.OFFICIAL) {
+                if (versions.isEmpty() && viewModel.errorMessage == null) {
+                    CircularProgressIndicator(color = NeonCyan)
+                } else {
+                    LazyColumn(modifier = Modifier.weight(1f)) {
+                        items(versions) { version ->
+                            val isSelected = viewModel.selectedVersion == version
+                            Surface(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .padding(vertical = 4.dp)
+                                    .clickable { viewModel.selectedVersion = version },
+                                shape = RoundedCornerShape(12.dp),
+                                color = if (isSelected) NeonCyan.copy(alpha = 0.2f) else Color.White.copy(alpha = 0.03f),
+                                border = if (isSelected) BorderStroke(1.dp, NeonCyan) else null
+                            ) {
+                                Row(modifier = Modifier.padding(16.dp), verticalAlignment = Alignment.CenterVertically) {
+                                    Icon(Icons.Default.Layers, null, tint = if (isSelected) NeonCyan else Color.Gray)
+                                    Spacer(modifier = Modifier.width(16.dp))
+                                    Text(text = version.id, fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Normal)
+                                    Spacer(modifier = Modifier.weight(1f))
+                                    if (isSelected) Icon(Icons.Default.CheckCircle, null, tint = NeonCyan)
+                                }
+                            }
+                        }
+                    }
+                }
             } else {
-                LazyColumn(modifier = Modifier.weight(1f)) {
-                    items(versions) { version ->
-                        val isSelected = viewModel.selectedVersion == version
-                        Surface(
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .padding(vertical = 4.dp)
-                                .clickable { viewModel.selectedVersion = version },
-                            shape = RoundedCornerShape(12.dp),
-                            color = if (isSelected) NeonCyan.copy(alpha = 0.2f) else Color.White.copy(alpha = 0.03f),
-                            border = if (isSelected) BorderStroke(1.dp, NeonCyan) else null
-                        ) {
-                            Row(modifier = Modifier.padding(16.dp), verticalAlignment = Alignment.CenterVertically) {
-                                Icon(Icons.Default.Layers, null, tint = if (isSelected) NeonCyan else Color.Gray) // Changed ViewInAr
-                                Spacer(modifier = Modifier.width(16.dp))
-                                Text(text = version.id, fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Normal)
-                                Spacer(modifier = Modifier.weight(1f))
-                                if (isSelected) Icon(Icons.Default.CheckCircle, null, tint = NeonCyan)
+                if (viewModel.modpacks.isEmpty() && viewModel.errorMessage == null) {
+                    CircularProgressIndicator(color = NeonCyan)
+                } else {
+                    LazyColumn(modifier = Modifier.weight(1f)) {
+                        items(viewModel.modpacks) { modpack ->
+                            val isSelected = viewModel.selectedModpack == modpack
+                            Surface(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .padding(vertical = 4.dp)
+                                    .clickable { viewModel.selectedModpack = modpack },
+                                shape = RoundedCornerShape(12.dp),
+                                color = if (isSelected) NeonPurple.copy(alpha = 0.2f) else Color.White.copy(alpha = 0.03f),
+                                border = if (isSelected) BorderStroke(1.dp, NeonPurple) else null
+                            ) {
+                                Text(text = modpack.title ?: "Unknown Modpack", modifier = Modifier.padding(16.dp))
                             }
                         }
                     }

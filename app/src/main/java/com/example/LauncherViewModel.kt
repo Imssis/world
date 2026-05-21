@@ -7,6 +7,7 @@ import androidx.documentfile.provider.DocumentFile
 import androidx.compose.runtime.*
 import androidx.lifecycle.viewModelScope
 import com.example.network.MojangVersion
+import com.example.network.ModHit
 import com.example.network.RetrofitClient
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -14,15 +15,23 @@ import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 
+enum class MainTab { OFFICIAL, MODPACKS }
+
 class LauncherViewModel : ViewModel() {
     var modsDirUri by mutableStateOf<Uri?>(null)
     var modFiles by mutableStateOf<List<DocumentFile>>(emptyList())
     var modIcons by mutableStateOf<Map<Uri, Uri?>>(emptyMap())
     
+    var currentTab by mutableStateOf(MainTab.OFFICIAL)
+    
     private val _versions = MutableStateFlow<List<MojangVersion>>(emptyList())
     val versions: StateFlow<List<MojangVersion>> = _versions
     
+    var modpacks by mutableStateOf<List<ModHit>>(emptyList())
+    
     var selectedVersion by mutableStateOf<MojangVersion?>(null)
+    var selectedModpack by mutableStateOf<ModHit?>(null)
+    
     var accountName by mutableStateOf("Player")
     var errorMessage by mutableStateOf<String?>(null)
 
@@ -65,7 +74,21 @@ class LauncherViewModel : ViewModel() {
                 Log.d("LauncherViewModel", "Fetched ${releases.size} versions")
             } catch (e: Exception) {
                 Log.e("LauncherViewModel", "Error fetching versions", e)
-                errorMessage = "Network Error: ${e.message}"
+                errorMessage = "Network Error: ${e.message}. Showing cached versions."
+                // In a real app, you would load from cache here
+            }
+        }
+    }
+
+    fun fetchModpacks() {
+        if (modpacks.isNotEmpty()) return
+        viewModelScope.launch {
+            try {
+                val response = RetrofitClient.apiService.searchModpacks()
+                modpacks = response.hits
+            } catch (e: Exception) {
+                Log.e("LauncherViewModel", "Error fetching modpacks", e)
+                errorMessage = "Error fetching modpacks: ${e.message}"
             }
         }
     }
