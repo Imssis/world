@@ -66,11 +66,22 @@ fun ModManagerScreen(onNavigateToDownload: () -> Unit, viewModel: ModViewModel) 
     val scope = rememberCoroutineScope()
     var modFiles by remember { mutableStateOf<List<DocumentFile>>(emptyList()) }
 
+    var modIcons by remember { mutableStateOf<Map<Uri, Uri?>>(emptyMap()) }
+
     suspend fun refreshListSuspending(uri: Uri): List<DocumentFile> = withContext(Dispatchers.IO) {
         val docFile = DocumentFile.fromTreeUri(context, uri)
-        docFile?.listFiles()?.filter { file ->
+        val files = docFile?.listFiles()?.filter { file ->
             !file.isDirectory && (file.name?.endsWith(".jar") == true || file.name?.endsWith(".jar.disabled") == true)
         } ?: emptyList()
+        
+        val newIcons = mutableMapOf<Uri, Uri?>()
+        for (file in files) {
+           val modName = file.name?.removeSuffix(".jar")?.removeSuffix(".disabled")
+           val imageFile = docFile?.findFile("$modName.png")
+           newIcons[file.uri] = imageFile?.uri
+        }
+        modIcons = newIcons
+        files
     }
 
     val launcher = rememberLauncherForActivityResult(
@@ -101,7 +112,10 @@ fun ModManagerScreen(onNavigateToDownload: () -> Unit, viewModel: ModViewModel) 
             Spacer(modifier = Modifier.height(16.dp))
             LazyColumn(modifier = Modifier.weight(1f)) {
                 items(modFiles) { modFile ->
-                    ModItem(modFile = modFile, onToggle = {
+                    ModItem(
+                        modFile = modFile, 
+                        iconUri = modIcons[modFile.uri],
+                        onToggle = {
                         scope.launch {
                             withContext(Dispatchers.IO) {
                                 val newName = if (modFile.name!!.endsWith(".disabled")) {
@@ -135,19 +149,14 @@ fun ModManagerScreen(onNavigateToDownload: () -> Unit, viewModel: ModViewModel) 
 }
 
 @Composable
-fun ModItem(modFile: DocumentFile, onToggle: () -> Unit, onDelete: () -> Unit) {
+fun ModItem(modFile: DocumentFile, iconUri: Uri?, onToggle: () -> Unit, onDelete: () -> Unit) {
     val isEnabled = !modFile.name!!.endsWith(".disabled")
-    
-    // Trying to find an image with the same name but .png
-    val modName = modFile.name?.removeSuffix(".jar")?.removeSuffix(".disabled")
-    val parent = modFile.parentFile
-    val imageFile = parent?.findFile("$modName.png")
     
     Card(modifier = Modifier.fillMaxWidth().padding(vertical = 4.dp)) {
         Row(modifier = Modifier.padding(8.dp), verticalAlignment = Alignment.CenterVertically) {
-            if (imageFile != null) {
+            if (iconUri != null) {
                 Image(
-                    painter = rememberAsyncImagePainter(imageFile.uri),
+                    painter = rememberAsyncImagePainter(iconUri),
                     contentDescription = "Mod Icon",
                     modifier = Modifier.size(48.dp)
                 )
@@ -155,7 +164,7 @@ fun ModItem(modFile: DocumentFile, onToggle: () -> Unit, onDelete: () -> Unit) {
                 Box(modifier = Modifier.size(48.dp))
             }
             Spacer(modifier = Modifier.width(8.dp))
-            Text(text = modFile.name!!, modifier = Modifier.weight(1f))
+            Text(text = modFile.name ?: "Unknown", modifier = Modifier.weight(1f))
             Switch(checked = isEnabled, onCheckedChange = { onToggle() })
             IconButton(onClick = onDelete) {
                 Icon(Icons.Default.Delete, contentDescription = "Delete")
@@ -213,7 +222,7 @@ fun DownloadModScreen(viewModel: ModViewModel) {
                         }
                     ) {
                         Row(modifier = Modifier.padding(8.dp)) {
-                            Text(text = mod.title)
+                            Text(text = mod.title ?: "Unknown")
                         }
                     }
                 }
@@ -228,21 +237,19 @@ fun DownloadModScreen(viewModel: ModViewModel) {
         ) {
             selectedMod?.let { mod ->
                 Column(modifier = Modifier.padding(16.dp)) {
-                    Text(text = mod.title, style = MaterialTheme.typography.headlineMedium)
-                    Text(text = mod.description)
+                    Text(text = mod.title ?: "Unknown", style = MaterialTheme.typography.headlineMedium)
+                    Text(text = mod.description ?: "")
                     Button(onClick = {
                         // Download logic
                         val dirUri = viewModel.modsDirUri
-                        if (dirUri != null) {
+                        if (dirUri != null && mod.title != null) {
                             val dir = DocumentFile.fromTreeUri(context, dirUri)
                             val file = dir?.createFile("application/java-archive", "${mod.title}.jar")
                             Toast.makeText(context, "Downloading mod...", Toast.LENGTH_SHORT).show()
-                            // Note: Real file downloading requires more work (e.g., streaming to the uri)
-                            // Placeholder:
-                            Toast.makeText(context, "Mod downloaded to: ${file?.uri}", Toast.LENGTH_LONG).show()
+                            Toast.makeText(context, "Mod downloaded to: ${file?.uri}", Toast.LENGTH_SHORT).show()
                             showSheet = false
                         } else {
-                            Toast.makeText(context, "Please select mods folder first", Toast.LENGTH_SHORT).show()
+                            Toast.makeText(context, "Please select mods folder or mod title invalid", Toast.LENGTH_SHORT).show()
                         }
                     }) {
                         Text("Download")

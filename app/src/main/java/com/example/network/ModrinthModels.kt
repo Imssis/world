@@ -8,11 +8,11 @@ import retrofit2.http.Query
 data class SearchResponse(val hits: List<ModHit>)
 data class ModHit(
     @SerializedName("project_id") val project_id: String,
-    val title: String,
-    val description: String,
-    val author: String,
-    val downloads: Int,
-    @SerializedName("icon_url") val icon_url: String
+    @SerializedName("title") val title: String?,
+    @SerializedName("description") val description: String?,
+    @SerializedName("author") val author: String?,
+    @SerializedName("downloads") val downloads: Int?,
+    @SerializedName("icon_url") val icon_url: String?
 )
 
 data class ProjectDetails(
